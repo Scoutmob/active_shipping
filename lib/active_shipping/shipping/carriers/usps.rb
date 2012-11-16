@@ -443,7 +443,8 @@ module ActiveMerchant
         
         success = response_success?(xml)
         message = response_message(xml)
-        
+        tracking_summary = nil
+        status = nil
         if success
           tracking_number, origin, destination = nil
           shipment_events = []
@@ -451,7 +452,9 @@ module ActiveMerchant
           
           tracking_summary = xml.elements.collect('*/*/TrackSummary'){ |e| e }.first
           tracking_details << tracking_summary
-          
+          if tracking_summary.upcase.include? "DELIVER"
+            status = "DELIVERED"
+          end
           tracking_number = root_node.elements['TrackInfo'].attributes['ID'].to_s
           
           tracking_details.each do |event|
@@ -465,7 +468,7 @@ module ActiveMerchant
               city        = $3
               state       = $4
               zip_code    = $5
-              location = Location.new(:city => city, :state => state, :postal_code => zip_code, :country => 'USA')
+              #location = Location.new(:city => city, :state => state, :postal_code => zip_code, :country => 'USA')
             end
             if location
               time = Time.parse(timestamp)
@@ -482,7 +485,9 @@ module ActiveMerchant
           :request => last_request,
           :shipment_events => shipment_events,
           :destination => destination,
-          :tracking_number => tracking_number
+          :tracking_number => tracking_number,
+          :status_code => status,
+          :status_description => tracking_summary
         )
       end
 
