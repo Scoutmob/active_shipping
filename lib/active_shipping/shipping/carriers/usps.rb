@@ -487,7 +487,7 @@ module ActiveMerchant
           :destination => destination,
           :tracking_number => tracking_number,
           :status_code => status,
-          :status_description => tracking_summary
+          :status_description => tracking_summary.nil? ? nil : tracking_summary.get_text.to_s
         )
       end
 
