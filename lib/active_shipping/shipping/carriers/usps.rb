@@ -452,7 +452,7 @@ module ActiveMerchant
           
           tracking_summary = xml.elements.collect('*/*/TrackSummary'){ |e| e }.first
           tracking_details << tracking_summary
-          if tracking_summary.upcase.include? "DELIVER"
+          if !tracking_summary.nil? && tracking_summary.get_text.to_s.upcase.include?("DELIVER")
             status = "DELIVERED"
           end
           tracking_number = root_node.elements['TrackInfo'].attributes['ID'].to_s
