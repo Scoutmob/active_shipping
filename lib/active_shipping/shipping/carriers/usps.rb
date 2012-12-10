@@ -492,7 +492,7 @@ module ActiveMerchant
       end
 
       def response_status_node(document)
-        document.elements['*/*/TrackSummary'] || document.elements['Error/Description']
+        document.elements['*/*/TrackSummary'] || document.elements['Error/Description'] || document.elements['*/*/Error/Description'] || document.elements['*/Error/Description']
       end
       
       def response_success?(document)
