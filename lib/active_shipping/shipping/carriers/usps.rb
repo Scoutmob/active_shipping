@@ -452,8 +452,16 @@ module ActiveMerchant
           
           tracking_summary = xml.elements.collect('*/*/TrackSummary'){ |e| e }.first
           tracking_details << tracking_summary
-          if !tracking_summary.nil? && tracking_summary.get_text.to_s.upcase.include?("DELIVER")
-            status = "DELIVERED"
+          if !tracking_summary.nil? 
+            if tracking_summary.get_text.to_s.upcase.include?("DELIVERED")
+              status = "DELIVERED"
+            elsif tracking_summary.get_text.to_s.upcase.include?("REFUSED") 
+              status = "REFUSED"
+            elsif tracking_summary.get_text.to_s.upcase.include?("EXCEPTION") 
+              status = "EXCEPTION"
+            elsif tracking_summary.get_text.to_s.upcase.include?("RETURNED") 
+              status = "RETURNED"
+            end
           end
           tracking_number = root_node.elements['TrackInfo'].attributes['ID'].to_s
           
