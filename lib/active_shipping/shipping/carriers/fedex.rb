@@ -204,13 +204,13 @@ module ActiveMerchant
       end
       
       def build_tracking_request(tracking_number, options={})
-        xml_request = XmlNode.new('TrackRequest', 'xmlns' => 'http://fedex.com/ws/track/v3') do |root_node|
+        xml_request = XmlNode.new('TrackRequest', 'xmlns' => 'http://fedex.com/ws/track/v6') do |root_node|
           root_node << build_request_header
           
           # Version
           root_node << XmlNode.new('Version') do |version_node|
             version_node << XmlNode.new('ServiceId', 'trck')
-            version_node << XmlNode.new('Major', '3')
+            version_node << XmlNode.new('Major', '6')
             version_node << XmlNode.new('Intermediate', '0')
             version_node << XmlNode.new('Minor', '0')
           end
@@ -240,9 +240,9 @@ module ActiveMerchant
           cd << XmlNode.new('MeterNumber', @options[:login])
         end
         
-        trasaction_detail = XmlNode.new('TransactionDetail') do |td|
-          td << XmlNode.new('CustomerTransactionId', 'ActiveShipping') # TODO: Need to do something better with this..
-        end
+        #trasaction_detail = XmlNode.new('TransactionDetail') do |td|
+          #td << XmlNode.new('CustomerTransactionId', 'ActiveShipping') # TODO: Need to do something better with this..
+        #end
         
         [web_authentication_detail, client_detail, trasaction_detail]
       end
