@@ -1,6 +1,7 @@
 # FedEx module by Jimmy Baker
 # http://github.com/jimmyebaker
 
+require 'date'
 module ActiveMerchant
   module Shipping
     
@@ -14,8 +15,7 @@ module ActiveMerchant
       cattr_reader :name
       @@name = "FedEx"
       
-      #TEST_URL = 'https://gatewaybeta.fedex.com:443/xml'
-      TEST_URL = 'https://wsbeta.fedex.com:443/web-services/track'
+      TEST_URL = 'https://gatewaybeta.fedex.com:443/xml'
       LIVE_URL = 'https://gateway.fedex.com:443/xml'
       
       CarrierCodes = {
@@ -86,6 +86,9 @@ module ActiveMerchant
         'express_mps_master' => 'EXPRESS_MPS_MASTER'
       }
 
+
+      TransitTimes = ["UNKNOWN","ONE_DAY","TWO_DAYS","THREE_DAYS","FOUR_DAYS","FIVE_DAYS","SIX_DAYS","SEVEN_DAYS","EIGHT_DAYS","NINE_DAYS","TEN_DAYS","ELEVEN_DAYS","TWELVE_DAYS","THIRTEEN_DAYS","FOURTEEN_DAYS","FIFTEEN_DAYS","SIXTEEN_DAYS","SEVENTEEN_DAYS","EIGHTEEN_DAYS"]
+
       # FedEx tracking codes as described in the FedEx Tracking Service WSDL Guide
       # All delays also have been marked as exceptions
       TRACKING_STATUS_CODES = HashWithIndifferentAccess.new({
@@ -137,7 +140,7 @@ module ActiveMerchant
         rate_request = build_rate_request(origin, destination, packages, options)
         
         response = commit(save_request(rate_request), (options[:test] || false)).gsub(/<(\/)?.*?\:(.*?)>/, '<\1\2>')
-        
+
         parse_rate_response(origin, destination, packages, response, options)
       end
       
@@ -148,7 +151,7 @@ module ActiveMerchant
         response = commit(save_request(tracking_request), (options[:test] || false)).gsub(/<(\/)?.*?\:(.*?)>/, '<\1\2>')
         parse_tracking_response(response, options)
       end
-      
+
       protected
       def build_rate_request(origin, destination, packages, options={})
         imperial = ['US','LR','MM'].include?(origin.country_code(:alpha2))
@@ -170,7 +173,7 @@ module ActiveMerchant
           root_node << XmlNode.new('VariableOptions', 'SATURDAY_DELIVERY')
           
           root_node << XmlNode.new('RequestedShipment') do |rs|
-            rs << XmlNode.new('ShipTimestamp', Time.now)
+            rs << XmlNode.new('ShipTimestamp', ship_timestamp(options[:turn_around_time]))
             rs << XmlNode.new('DropoffType', options[:dropoff_type] || 'REGULAR_PICKUP')
             rs << XmlNode.new('PackagingType', options[:packaging_type] || 'YOUR_PACKAGING')
             
@@ -204,13 +207,13 @@ module ActiveMerchant
       end
       
       def build_tracking_request(tracking_number, options={})
-        xml_request = XmlNode.new('TrackRequest', 'xmlns' => 'http://fedex.com/ws/track/v6') do |root_node|
+        xml_request = XmlNode.new('TrackRequest', 'xmlns' => 'http://fedex.com/ws/track/v3') do |root_node|
           root_node << build_request_header
           
           # Version
           root_node << XmlNode.new('Version') do |version_node|
             version_node << XmlNode.new('ServiceId', 'trck')
-            version_node << XmlNode.new('Major', '6')
+            version_node << XmlNode.new('Major', '3')
             version_node << XmlNode.new('Intermediate', '0')
             version_node << XmlNode.new('Minor', '0')
           end
@@ -273,6 +276,13 @@ module ActiveMerchant
           is_saturday_delivery = rated_shipment.get_text('AppliedOptions').to_s == 'SATURDAY_DELIVERY'
           service_type = is_saturday_delivery ? "#{service_code}_SATURDAY_DELIVERY" : service_code
           
+          transit_time = rated_shipment.get_text('TransitTime').to_s if service_code == "FEDEX_GROUND"
+          max_transit_time = rated_shipment.get_text('MaximumTransitTime').to_s if service_code == "FEDEX_GROUND"
+
+          delivery_timestamp = rated_shipment.get_text('DeliveryTimestamp').to_s
+
+          delivery_range = delivery_range_from(transit_time, max_transit_time, delivery_timestamp, options)
+
           currency = handle_incorrect_currency_codes(rated_shipment.get_text('RatedShipmentDetails/ShipmentRateDetail/TotalNetCharge/Currency').to_s)
           rate_estimates << RateEstimate.new(origin, destination, @@name,
                               self.class.service_name_for_code(service_type),
@@ -280,9 +290,9 @@ module ActiveMerchant
                               :total_price => rated_shipment.get_text('RatedShipmentDetails/ShipmentRateDetail/TotalNetCharge/Amount').to_s.to_f,
                               :currency => currency,
                               :packages => packages,
-                              :delivery_range => [rated_shipment.get_text('DeliveryTimestamp').to_s] * 2)
-	    end
-		
+                              :delivery_range => delivery_range)
+        end
+
         if rate_estimates.empty?
           success = false
           message = "No shipping rates could be found for the destination address" if message.blank?
@@ -290,7 +300,35 @@ module ActiveMerchant
 
         RateResponse.new(success, message, Hash.from_xml(response), :rates => rate_estimates, :xml => response, :request => last_request, :log_xml => options[:log_xml])
       end
-      
+
+      def delivery_range_from(transit_time, max_transit_time, delivery_timestamp, options)
+        delivery_range = [delivery_timestamp, delivery_timestamp]
+        
+        #if there's no delivery timestamp but we do have a transit time, use it
+        if delivery_timestamp.blank? && transit_time.present?
+          transit_range  = parse_transit_times([transit_time,max_transit_time.presence || transit_time])
+          delivery_range = transit_range.map{|days| business_days_from(ship_date(options[:turn_around_time]), days)}
+        end
+
+        delivery_range
+      end
+
+      def business_days_from(date, days)
+        future_date = date
+        count       = 0
+
+        while count < days
+          future_date += 1.day
+          count += 1 if business_day?(future_date)
+        end
+
+        future_date
+      end
+
+      def business_day?(date)
+        (1..5).include?(date.wday)
+      end
+
       def parse_tracking_response(response, options)
         xml = REXML::Document.new(response)
         root_node = xml.elements['TrackReply']
@@ -299,18 +337,22 @@ module ActiveMerchant
         message = response_message(xml)
         
         if success
-          tracking_number, origin, destination, status, status_code, status_description = nil
+          tracking_number, origin, destination, status, status_code, status_description, delivery_signature = nil
           shipment_events = []
 
           tracking_details = root_node.elements['TrackDetails']
           tracking_number = tracking_details.get_text('TrackingNumber').to_s
-          
+
           status_code = tracking_details.get_text('StatusCode').to_s
           status_description = tracking_details.get_text('StatusDescription').to_s
           status = TRACKING_STATUS_CODES[status_code]
 
+          if status_code == 'DL' && tracking_details.get_text('SignatureProofOfDeliveryAvailable').to_s == 'true'
+            delivery_signature = tracking_details.get_text('DeliverySignatureName').to_s
+          end
+
           origin_node = tracking_details.elements['OriginLocationAddress']
-        
+
           if origin_node
             origin = Location.new(
                   :country =>     origin_node.get_text('CountryCode').to_s,
@@ -319,17 +361,7 @@ module ActiveMerchant
             )
           end
 
-          destination_node = tracking_details.elements['DestinationAddress']
-
-          if destination_node.nil?
-            destination_node = tracking_details.elements['ActualDeliveryAddress']
-          end
-
-          destination = Location.new(
-                :country =>     destination_node.get_text('CountryCode').to_s,
-                :province =>    destination_node.get_text('StateOrProvinceCode').to_s,
-                :city =>        destination_node.get_text('City').to_s
-              )
+          destination = extract_destination(tracking_details)
           
           tracking_details.elements.each('Events') do |event|
             address  = event.elements['Address']
@@ -342,11 +374,10 @@ module ActiveMerchant
             
             location = Location.new(:city => city, :state => state, :postal_code => zip_code, :country => country)
             description = event.get_text('EventDescription').to_s
-            
-            # for now, just assume UTC, even though it probably isn't
-            time = Time.parse("#{event.get_text('Timestamp').to_s}")
-            zoneless_time = Time.utc(time.year, time.month, time.mday, time.hour, time.min, time.sec)
-            
+
+            time          = Time.parse("#{event.get_text('Timestamp').to_s}")
+            zoneless_time = time.utc
+
             shipment_events << ShipmentEvent.new(description, zoneless_time, location)
           end
           shipment_events = shipment_events.sort_by(&:time)
@@ -360,13 +391,24 @@ module ActiveMerchant
           :status => status,
           :status_code => status_code,
           :status_description => status_description,
+          :delivery_signature => delivery_signature,
           :shipment_events => shipment_events,
           :origin => origin,
           :destination => destination,
           :tracking_number => tracking_number
         )
       end
-            
+
+      def ship_timestamp(delay_in_hours)
+        delay_in_hours ||= 0
+        Time.now + delay_in_hours.hours
+      end
+
+      def ship_date(delay_in_hours)
+        delay_in_hours ||= 0
+        (Time.now + delay_in_hours.hours).to_date
+      end
+
       def response_status_node(document)
         document.elements['/*/Notifications/']
       end
@@ -390,6 +432,35 @@ module ActiveMerchant
         when /SID/i then 'SGD'
         else currency
         end
+      end
+
+      def parse_transit_times(times)
+        results = []
+        times.each do |day_count|
+          days = TransitTimes.index(day_count.to_s.chomp)
+          results << days.to_i
+        end
+        results
+      end
+
+      def extract_destination(document)
+        node = document.elements['DestinationAddress'] || document.elements['ActualDeliveryAddress']
+
+        args = if node
+          {
+            :country => node.get_text('CountryCode').to_s,
+            :province => node.get_text('StateOrProvinceCode').to_s,
+            :city => node.get_text('City').to_s
+          }
+        else
+          {
+            :country => ActiveMerchant::Country.new(:alpha2 => 'ZZ', :name => 'Unknown or Invalid Territory', :alpha3 => 'ZZZ', :numeric => '999'),
+            :province => 'unknown',
+            :city => 'unknown'
+          }
+        end
+
+        Location.new(args)
       end
     end
   end
