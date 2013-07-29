@@ -14,7 +14,8 @@ module ActiveMerchant
       cattr_reader :name
       @@name = "FedEx"
       
-      TEST_URL = 'https://gatewaybeta.fedex.com:443/xml'
+      #TEST_URL = 'https://gatewaybeta.fedex.com:443/xml'
+      TEST_URL = 'https://wsbeta.fedex.com:443/web-services'
       LIVE_URL = 'https://gateway.fedex.com:443/xml'
       
       CarrierCodes = {
