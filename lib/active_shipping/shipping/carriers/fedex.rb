@@ -240,9 +240,9 @@ module ActiveMerchant
           cd << XmlNode.new('MeterNumber', @options[:login])
         end
         
-        #trasaction_detail = XmlNode.new('TransactionDetail') do |td|
-          #td << XmlNode.new('CustomerTransactionId', 'ActiveShipping') # TODO: Need to do something better with this..
-        #end
+        trasaction_detail = XmlNode.new('TransactionDetail') do |td|
+          td << XmlNode.new('CustomerTransactionId', 'ActiveShipping') # TODO: Need to do something better with this..
+        end
         
         [web_authentication_detail, client_detail, trasaction_detail]
       end
