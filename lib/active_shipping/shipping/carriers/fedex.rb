@@ -2,6 +2,8 @@
 # http://github.com/jimmyebaker
 
 require 'date'
+require 'savon'
+
 module ActiveMerchant
   module Shipping
     
@@ -147,9 +149,25 @@ module ActiveMerchant
       def find_tracking_info(tracking_number, options={})
         options = @options.update(options)
         
-        tracking_request = build_tracking_request(tracking_number, options)
-        response = commit(save_request(tracking_request), (options[:test] || false)).gsub(/<(\/)?.*?\:(.*?)>/, '<\1\2>')
-        parse_tracking_response(response, options)
+        #tracking_request = build_tracking_request(tracking_number, options)
+        #response = commit(save_request(tracking_request), (options[:test] || false)).gsub(/<(\/)?.*?\:(.*?)>/, '<\1\2>')
+        #parse_tracking_response(response, options)
+        
+        client = Savon::Client.new do
+          wsdl.document = File.expand_path("../TrackService_v6.wsdl", __FILE__)
+          wsdl.endpoint = TEST_URL
+        end
+        response = client.request "TrackRequest" do
+          soap.body = {
+            'WebAuthenticationDetail' => {'UserCredential' => {'Key' => @options[:key], 'Password' => @options[:password]}},
+            'ClientDetail' => {'AccountNumber' => @options[:account], 'MeterNumber' => @options[:login]},
+            'Version' => {'ServiceId' => 'trck', 'Major' => '6', 'Intermediate' => '0', 'Minor' => '0'},
+            'PackageIdentifier' => {'Value' => tracking_number, 'Type' => PackageIdentifierTypes['tracking_number']},
+            'ShipDateRangeBegin' => (Time.now - 10000000).strftime("%Y-%m-%d"),
+            'ShipDateRangeEnd' => Time.now.strftime("%Y-%m-%d"),
+            'IncludeDetailedScans' => '1'}
+        end
+        parse_tracking_response(response.doc().to_s, options)
       end
 
       protected
