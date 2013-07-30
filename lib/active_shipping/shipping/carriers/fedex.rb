@@ -159,8 +159,8 @@ module ActiveMerchant
         end
         response = client.request "TrackRequest" do
           soap.body = {
-            'WebAuthenticationDetail' => {'UserCredential' => {'Key' => @options[:key], 'Password' => @options[:password]}},
-            'ClientDetail' => {'AccountNumber' => @options[:account], 'MeterNumber' => @options[:login]},
+            'WebAuthenticationDetail' => {'UserCredential' => {'Key' => options[:key], 'Password' => options[:password]}},
+            'ClientDetail' => {'AccountNumber' => options[:account], 'MeterNumber' => options[:login]},
             'Version' => {'ServiceId' => 'trck', 'Major' => '6', 'Intermediate' => '0', 'Minor' => '0'},
             'PackageIdentifier' => {'Value' => tracking_number, 'Type' => PackageIdentifierTypes['tracking_number']},
             'ShipDateRangeBegin' => (Time.now - 10000000).strftime("%Y-%m-%d"),
