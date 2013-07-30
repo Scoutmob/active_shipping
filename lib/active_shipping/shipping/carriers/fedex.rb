@@ -167,7 +167,7 @@ module ActiveMerchant
             'ShipDateRangeEnd' => Time.now.strftime("%Y-%m-%d"),
             'IncludeDetailedScans' => '1'}
         end
-        parse_tracking_response(response.doc().to_s, options)
+        parse_tracking_response(response.to_xml, options)
       end
 
       protected
