@@ -350,7 +350,9 @@ module ActiveMerchant
       def parse_tracking_response(response, options)
         xml = REXML::Document.new(response)
         root_node = xml.elements['TrackReply']
-        
+        if root_node.nil?
+          root_node = xml.elements['SOAP-ENV:Envelope/SOAP-ENV:Body/TrackReply']
+        end
         success = response_success?(xml)
         message = response_message(xml)
         
