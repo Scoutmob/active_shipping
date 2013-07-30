@@ -430,7 +430,11 @@ module ActiveMerchant
       end
 
       def response_status_node(document)
-        document.elements['/*/Notifications/']
+        notes = document.elements['/*/Notifications/']
+        if notes.nil?
+          notes = document.elements['SOAP-ENV:Envelope/SOAP-ENV:Body/*/Notifications/']
+        end
+        return notes
       end
       
       def response_success?(document)
