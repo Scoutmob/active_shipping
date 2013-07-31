@@ -20,8 +20,9 @@ module ActiveMerchant
       #TEST_URL = 'https://gatewaybeta.fedex.com:443/xml'
       TEST_URL = 'https://wsbeta.fedex.com:443/web-services/track'
       
-      LIVE_URL = 'https://gateway.fedex.com:443/xml'
-      
+      #LIVE_URL = 'https://gateway.fedex.com:443/xml'
+      LIVE_URL = 'https://ws.fedex.com:443/web-services/track'
+       
       CarrierCodes = {
         "fedex_ground" => "FDXG",
         "fedex_express" => "FDXE"
